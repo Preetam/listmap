@@ -7,13 +7,17 @@ import (
 	"time"
 )
 
-func iterate(l *List) {
-	cur := l.root.first
-	fmt.Println("cur:", cur)
-	for cur != 0 {
-		l.printRecordAtIndex(int(cur))
-		cur = uint32(l.nextIndex(int(cur)))
+const N = 2048
+
+func assertOrder(l *List) bool {
+	prev := ""
+	for c := l.NewCursor(); c != nil; c = c.Next() {
+		if c.Key() < prev {
+			return false
+		}
 	}
+
+	return true
 }
 
 func Test1(t *testing.T) {
@@ -22,10 +26,14 @@ func Test1(t *testing.T) {
 	t.Log(l.root)
 
 	l.Set("1", "bar")
-	l.Set("2", "baz")
-	l.Set("3", "baz")
-	l.Set("4", "baz")
-	l.Set("45", "baz")
+	l.Set("2", "foobar")
+	l.Set("3", "barbaz")
+	l.Set("4", "b")
+	l.Set("45", "foo")
+
+	if !assertOrder(l) {
+		t.Error("keys were not in order")
+	}
 
 	l.Destroy()
 }
@@ -39,16 +47,8 @@ func Test2(t *testing.T) {
 	l.Set("c", "CCCCC")
 	l.Set("b", "BBBBB")
 
-	l.Destroy()
-}
-
-func Test3(t *testing.T) {
-	l := NewList("test.list3")
-
-	for i := 0; i < 10; i++ {
-		n := rand.Intn(1024)
-		t.Logf("inserting `%d'\n", n)
-		l.Set(fmt.Sprint(n), ".")
+	if !assertOrder(l) {
+		t.Error("keys were not in order")
 	}
 
 	l.Destroy()
@@ -57,36 +57,91 @@ func Test3(t *testing.T) {
 func Test4(t *testing.T) {
 	l := NewList("test.list4")
 
-	t.Log(l.root)
-
 	l.Set("1", "AAAAA")
 	l.Set("3", "CCCCC")
 	l.Set("2", "BBBBB")
 	l.Set("0", "00000")
 
+	if !assertOrder(l) {
+		t.Error("keys were not in order")
+	}
+
 	l.Destroy()
 }
 
-func Test5(t *testing.T) {
-	l := NewList("test.list5")
+func TestSequential(t *testing.T) {
+	l := NewList("test.sequential")
 
-	var N = 1 << 22
 	start := time.Now()
 
 	for i := 0; i < N; i++ {
-		l.Set(fmt.Sprintf("%09d", i), ".")
+		l.Set(fmt.Sprintf("%09d", i), fmt.Sprint(i))
+	}
+	t.Log("Time to insert", N, "integers:", time.Now().Sub(start))
+
+	if !assertOrder(l) {
+		t.Error("keys were not in order")
 	}
 
 	l.Close()
-	fmt.Println("Time to insert", N, "integers:", time.Now().Sub(start))
 
 }
 
 func TestRead(t *testing.T) {
-	l := OpenList("test.list5")
+	l := OpenList("test.sequential")
 	if l == nil {
 		t.Error("Couldn't open list")
 	}
 
-	iterate(l)
+	if val, err := l.Get("000000005"); err != nil || val != "5" {
+		if err != nil {
+			t.Error(err)
+		} else {
+			t.Errorf("expected value %v, got %v", "5", val)
+		}
+	}
+
+	if val, err := l.Get("5"); err == nil {
+		t.Errorf("expected error `%v', got %v with value `%v'", ErrKeyNotFound,
+			nil, val)
+	}
+
+	if !assertOrder(l) {
+		t.Error("keys were not in order")
+	}
+
+	l.Destroy()
+}
+
+func TestRandomShort(t *testing.T) {
+	l := NewList("test.random_short")
+
+	for i := 0; i < N; i++ {
+		n := rand.Intn(N)
+		t.Logf("inserting `%d'\n", n)
+		l.Set(fmt.Sprint(n), ".")
+	}
+
+	if !assertOrder(l) {
+		t.Error("keys were not in order")
+	}
+
+	l.Destroy()
+}
+
+func TestRandomLong(t *testing.T) {
+	l := NewList("test.random_long")
+
+	start := time.Now()
+
+	for i := 0; i < N*8; i++ {
+		l.Set(fmt.Sprint(rand.Int()), fmt.Sprint(i))
+	}
+	t.Log("Time to insert", N*8, "integers:", time.Now().Sub(start))
+
+	if !assertOrder(l) {
+		t.Error("keys were not in order")
+	}
+
+	l.Destroy()
 }

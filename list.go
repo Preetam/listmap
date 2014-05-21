@@ -2,17 +2,20 @@ package list
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"sync"
 	"syscall"
 	"unsafe"
 )
 
-var ErrKeyNotFound = errors.New("list: key not found")
+var (
+	ErrKeyNotFound = errors.New("list: key not found")
+)
 
-const rootLength = unsafe.Sizeof(root{})
-const recordLength = unsafe.Sizeof(record{})
+const (
+	rootLength   = unsafe.Sizeof(root{})
+	recordLength = unsafe.Sizeof(record{})
+)
 
 type List struct {
 	file   *os.File
@@ -62,7 +65,6 @@ func NewList(file string) *List {
 	}
 
 	l.root = (*root)(unsafe.Pointer(&l.mapped[0]))
-	fmt.Println(unsafe.Pointer(l.root))
 	return l
 }
 
@@ -108,7 +110,6 @@ func (l *List) Destroy() {
 
 func (l *List) Set(key, value string) {
 	l.lock.Lock()
-	defer l.lock.Unlock()
 
 	stat, _ := l.file.Stat()
 	if int64(l.root.lastInserted)+1<<23 > int64(len(l.mapped)) {
@@ -129,88 +130,75 @@ func (l *List) Set(key, value string) {
 		l.root.first = uint32(rootLength)
 		l.root.last = uint32(rootLength)
 		l.root.lastInserted = uint32(rootLength)
+		l.lock.Unlock()
 		return
 	}
 
-	lastInsertedRecord := l.lastInsertedRecord()
-
-	lastKey := l.getKeyAtRecord(int(l.root.last))
+	cursor := l.NewCursor().seek(int(l.root.lastInserted))
 
 	// New records always go to the end
-	currentIndex := int(l.root.lastInserted) + int(recordLength) + int(lastInsertedRecord.keylen+lastInsertedRecord.vallen)
+	currentIndex := int(l.root.lastInserted) + int(recordLength) + int(cursor.r.keylen+cursor.r.vallen)
 	l.root.lastInserted = uint32(currentIndex)
 	r := (*record)(unsafe.Pointer(&l.mapped[currentIndex]))
 	r.keylen = uint16(len(key))
 	r.vallen = uint16(len(value))
 	copy(l.mapped[currentIndex+int(recordLength):], []byte(key+value))
 
+	l.lock.Unlock()
+
+	cursor = cursor.seek(int(l.root.last))
+
+	lastKey := cursor.Key()
+
 	// Sequential insert
 	if lastKey < key {
-		lastInsertedRecord.next = uint32(currentIndex)
+		cursor.r.next = uint32(currentIndex)
 		r.prev = l.root.last
-		l.root.last = lastInsertedRecord.next
+		l.root.last = cursor.r.next
 	} else {
 		// find first greater than
 
-		cur := int(l.root.first)
-		for cur != 0 {
-			if l.getKeyAtRecord(cur) > key {
-				if cur == int(l.root.first) {
+		cursor = cursor.seek(int(l.root.first))
+
+		for cursor != nil {
+			if cursor.Key() > key {
+				if cursor.index == int(l.root.first) {
 					// inserting before first
-					firstRecord := l.getRecordAtIndex(int(l.root.first))
-					firstRecord.prev = uint32(currentIndex)
-					r.next = uint32(cur)
+					cursor.r.prev = uint32(currentIndex)
+					r.next = uint32(cursor.index)
 					l.root.first = uint32(currentIndex)
 					return
 				} else {
-					previousRecord := l.getRecordAtIndex(l.prevIndex(cur))
-					nextRecord := l.getRecordAtIndex(cur)
+					nextRecord := cursor.r
+					nextRecordIndex := cursor.index
+					previousRecord := cursor.Prev().r
+					previousRecordIndex := cursor.index
+
+					r.next = uint32(nextRecordIndex)
+					r.prev = uint32(previousRecordIndex)
+
 					previousRecord.next = uint32(currentIndex)
-					r.prev = uint32(nextRecord.prev)
 					nextRecord.prev = uint32(currentIndex)
-					r.next = uint32(cur)
+
 					return
 				}
 			} else {
-				cur = l.nextIndex(cur)
+				cursor = cursor.Next()
 			}
 		}
 	}
 }
 
 func (l *List) Get(key string) (string, error) {
+	for c := l.NewCursor(); c != nil; c = c.Next() {
+		cKey := c.Key()
+		if cKey > key {
+			return "", ErrKeyNotFound
+		}
+
+		if cKey == key {
+			return c.Value(), nil
+		}
+	}
 	return "", ErrKeyNotFound
-}
-
-func (l *List) lastInsertedRecord() *record {
-	return (*record)(unsafe.Pointer(&l.mapped[int(l.root.lastInserted)]))
-}
-
-func (l *List) getRecordAtIndex(i int) *record {
-	return (*record)(unsafe.Pointer(&l.mapped[i]))
-}
-
-func (l *List) getKeyAtRecord(i int) string {
-	r := (*record)(unsafe.Pointer(&l.mapped[i]))
-	return string(l.mapped[i+int(recordLength) : i+int(recordLength)+int(r.keylen)])
-}
-
-func (l *List) getValueAtRecord(i int) string {
-	r := (*record)(unsafe.Pointer(&l.mapped[i]))
-	return string(l.mapped[i+int(recordLength)+int(r.keylen) : i+int(recordLength)+int(r.keylen)+int(r.vallen)])
-}
-
-func (l *List) nextIndex(i int) int {
-	r := (*record)(unsafe.Pointer(&l.mapped[i]))
-	return int(r.next)
-}
-
-func (l *List) prevIndex(i int) int {
-	r := (*record)(unsafe.Pointer(&l.mapped[i]))
-	return int(r.prev)
-}
-
-func (l *List) printRecordAtIndex(i int) {
-	r := (*record)(unsafe.Pointer(&l.mapped[i]))
-	fmt.Printf("[prev: %d, next: %d] -- %s => %s\n", r.prev, r.next, l.getKeyAtRecord(i), l.getValueAtRecord(i))
 }
