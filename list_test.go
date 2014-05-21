@@ -23,8 +23,6 @@ func assertOrder(l *List) bool {
 func Test1(t *testing.T) {
 	l := NewList("test.list")
 
-	t.Log(l.root)
-
 	l.Set("1", "bar")
 	l.Set("2", "foobar")
 	l.Set("3", "barbaz")
@@ -40,8 +38,6 @@ func Test1(t *testing.T) {
 
 func Test2(t *testing.T) {
 	l := NewList("test.list2")
-
-	t.Log(l.root)
 
 	l.Set("a", "AAAAA")
 	l.Set("c", "CCCCC")
@@ -69,26 +65,40 @@ func Test4(t *testing.T) {
 	l.Destroy()
 }
 
-func TestSequential(t *testing.T) {
-	l := NewList("test.sequential")
+func TestSequentialShort(t *testing.T) {
+	l := NewList("test.sequential_short")
 
 	start := time.Now()
-
 	for i := 0; i < N; i++ {
 		l.Set(fmt.Sprintf("%09d", i), fmt.Sprint(i))
 	}
-	t.Log("Time to insert", N, "integers:", time.Now().Sub(start))
+	t.Log("Time to insert", N, "sequential integers:", time.Now().Sub(start))
 
 	if !assertOrder(l) {
 		t.Error("keys were not in order")
 	}
 
 	l.Close()
+}
 
+func TestSequentialLong(t *testing.T) {
+	l := NewList("test.sequential_long")
+
+	start := time.Now()
+	for i := 0; i < N*8; i++ {
+		l.Set(fmt.Sprintf("%09d", i), fmt.Sprint(i))
+	}
+	t.Log("Time to insert", N*8, "sequential integers:", time.Now().Sub(start))
+
+	if !assertOrder(l) {
+		t.Error("keys were not in order")
+	}
+
+	l.Destroy()
 }
 
 func TestRead(t *testing.T) {
-	l := OpenList("test.sequential")
+	l := OpenList("test.sequential_short")
 	if l == nil {
 		t.Error("Couldn't open list")
 	}
@@ -98,6 +108,14 @@ func TestRead(t *testing.T) {
 			t.Error(err)
 		} else {
 			t.Errorf("expected value %v, got %v", "5", val)
+		}
+	}
+
+	if val, err := l.Get("000000013"); err != nil || val != "13" {
+		if err != nil {
+			t.Error(err)
+		} else {
+			t.Errorf("expected value %v, got %v", "13", val)
 		}
 	}
 
@@ -116,11 +134,11 @@ func TestRead(t *testing.T) {
 func TestRandomShort(t *testing.T) {
 	l := NewList("test.random_short")
 
+	start := time.Now()
 	for i := 0; i < N; i++ {
-		n := rand.Intn(N)
-		t.Logf("inserting `%d'\n", n)
-		l.Set(fmt.Sprint(n), ".")
+		l.Set(fmt.Sprint(rand.Int()), fmt.Sprint(i))
 	}
+	t.Log("Time to insert", N, "random integers:", time.Now().Sub(start))
 
 	if !assertOrder(l) {
 		t.Error("keys were not in order")
@@ -133,14 +151,23 @@ func TestRandomLong(t *testing.T) {
 	l := NewList("test.random_long")
 
 	start := time.Now()
-
-	for i := 0; i < N*8; i++ {
+	for i := 0; i < N*4; i++ {
 		l.Set(fmt.Sprint(rand.Int()), fmt.Sprint(i))
 	}
-	t.Log("Time to insert", N*8, "integers:", time.Now().Sub(start))
+	t.Log("Time to insert", N*4, "random integers:", time.Now().Sub(start))
 
 	if !assertOrder(l) {
 		t.Error("keys were not in order")
+	}
+
+	l.Destroy()
+}
+
+func BenchmarkSequentialWrites(b *testing.B) {
+	l := NewList("benchmark.sequential")
+
+	for i := 0; i < b.N; i++ {
+		l.Set(fmt.Sprintf("%020d", i), fmt.Sprint(i))
 	}
 
 	l.Destroy()
