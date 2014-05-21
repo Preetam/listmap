@@ -1,6 +1,7 @@
 package list
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -10,9 +11,9 @@ import (
 const N = 2048
 
 func assertOrder(l *List) bool {
-	prev := ""
+	prev := []byte{}
 	for c := l.NewCursor(); c != nil; c = c.Next() {
-		if c.Key() < prev {
+		if bytes.Compare(c.Key(), prev) < 0 {
 			return false
 		}
 	}
@@ -23,11 +24,11 @@ func assertOrder(l *List) bool {
 func Test1(t *testing.T) {
 	l := NewList("test.list")
 
-	l.Set("1", "bar")
-	l.Set("2", "foobar")
-	l.Set("3", "barbaz")
-	l.Set("4", "b")
-	l.Set("45", "foo")
+	l.Set([]byte("1"), []byte("bar"))
+	l.Set([]byte("2"), []byte("foobar"))
+	l.Set([]byte("3"), []byte("barbaz"))
+	l.Set([]byte("4"), []byte("b"))
+	l.Set([]byte("45"), []byte("foo"))
 
 	if !assertOrder(l) {
 		t.Error("keys were not in order")
@@ -39,9 +40,9 @@ func Test1(t *testing.T) {
 func Test2(t *testing.T) {
 	l := NewList("test.list2")
 
-	l.Set("a", "AAAAA")
-	l.Set("c", "CCCCC")
-	l.Set("b", "BBBBB")
+	l.Set([]byte("a"), []byte("AAAAA"))
+	l.Set([]byte("c"), []byte("CCCCC"))
+	l.Set([]byte("b"), []byte("BBBBB"))
 
 	if !assertOrder(l) {
 		t.Error("keys were not in order")
@@ -53,10 +54,10 @@ func Test2(t *testing.T) {
 func Test4(t *testing.T) {
 	l := NewList("test.list4")
 
-	l.Set("1", "AAAAA")
-	l.Set("3", "CCCCC")
-	l.Set("2", "BBBBB")
-	l.Set("0", "00000")
+	l.Set([]byte("1"), []byte("AAAAA"))
+	l.Set([]byte("3"), []byte("CCCCC"))
+	l.Set([]byte("2"), []byte("BBBBB"))
+	l.Set([]byte("0"), []byte("00000"))
 
 	if !assertOrder(l) {
 		t.Error("keys were not in order")
@@ -70,7 +71,7 @@ func TestSequentialShort(t *testing.T) {
 
 	start := time.Now()
 	for i := 0; i < N; i++ {
-		l.Set(fmt.Sprintf("%09d", i), fmt.Sprint(i))
+		l.Set([]byte(fmt.Sprintf("%09d", i)), []byte(fmt.Sprint(i)))
 	}
 	t.Log("Time to insert", N, "sequential integers:", time.Now().Sub(start))
 
@@ -86,7 +87,7 @@ func TestSequentialLong(t *testing.T) {
 
 	start := time.Now()
 	for i := 0; i < N*8; i++ {
-		l.Set(fmt.Sprintf("%09d", i), fmt.Sprint(i))
+		l.Set([]byte(fmt.Sprintf("%09d", i)), []byte(fmt.Sprint(i)))
 	}
 	t.Log("Time to insert", N*8, "sequential integers:", time.Now().Sub(start))
 
@@ -103,23 +104,23 @@ func TestRead(t *testing.T) {
 		t.Error("Couldn't open list")
 	}
 
-	if val, err := l.Get("000000005"); err != nil || val != "5" {
+	if val, err := l.Get([]byte("000000005")); err != nil || bytes.Compare(val, []byte("5")) != 0 {
 		if err != nil {
 			t.Error(err)
 		} else {
-			t.Errorf("expected value %v, got %v", "5", val)
+			t.Errorf("expected value %v, got %v", []byte("5"), val)
 		}
 	}
 
-	if val, err := l.Get("000000013"); err != nil || val != "13" {
+	if val, err := l.Get([]byte("000000013")); err != nil || bytes.Compare(val, []byte("13")) != 0 {
 		if err != nil {
 			t.Error(err)
 		} else {
-			t.Errorf("expected value %v, got %v", "13", val)
+			t.Errorf("expected value %v, got %v", []byte("13"), val)
 		}
 	}
 
-	if val, err := l.Get("5"); err == nil {
+	if val, err := l.Get([]byte("5")); err == nil {
 		t.Errorf("expected error `%v', got %v with value `%v'", ErrKeyNotFound,
 			nil, val)
 	}
@@ -136,7 +137,7 @@ func TestRandomShort(t *testing.T) {
 
 	start := time.Now()
 	for i := 0; i < N; i++ {
-		l.Set(fmt.Sprint(rand.Int()), fmt.Sprint(i))
+		l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i)))
 	}
 	t.Log("Time to insert", N, "random integers:", time.Now().Sub(start))
 
@@ -152,7 +153,7 @@ func TestRandomLong(t *testing.T) {
 
 	start := time.Now()
 	for i := 0; i < N*4; i++ {
-		l.Set(fmt.Sprint(rand.Int()), fmt.Sprint(i))
+		l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i)))
 	}
 	t.Log("Time to insert", N*4, "random integers:", time.Now().Sub(start))
 
@@ -167,7 +168,7 @@ func BenchmarkSequentialWrites(b *testing.B) {
 	l := NewList("benchmark.sequential")
 
 	for i := 0; i < b.N; i++ {
-		l.Set(fmt.Sprintf("%020d", i), fmt.Sprint(i))
+		l.Set([]byte(fmt.Sprintf("%020d", i)), []byte(fmt.Sprint(i)))
 	}
 
 	l.Destroy()

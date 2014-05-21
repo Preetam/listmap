@@ -1,6 +1,7 @@
 package list
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"sync"
@@ -108,7 +109,7 @@ func (l *List) Destroy() {
 	os.Remove(l.file.Name())
 }
 
-func (l *List) Set(key, value string) {
+func (l *List) Set(key, value []byte) {
 	l.lock.Lock()
 
 	stat, _ := l.file.Stat()
@@ -125,7 +126,7 @@ func (l *List) Set(key, value string) {
 		r := (*record)(unsafe.Pointer(&l.mapped[rootLength]))
 		r.keylen = uint16(len(key))
 		r.vallen = uint16(len(value))
-		copy(l.mapped[rootLength+recordLength:], []byte(key+value))
+		copy(l.mapped[rootLength+recordLength:], append(key, value...))
 
 		l.root.first = uint32(rootLength)
 		l.root.last = uint32(rootLength)
@@ -142,7 +143,7 @@ func (l *List) Set(key, value string) {
 	r := (*record)(unsafe.Pointer(&l.mapped[currentIndex]))
 	r.keylen = uint16(len(key))
 	r.vallen = uint16(len(value))
-	copy(l.mapped[currentIndex+int(recordLength):], []byte(key+value))
+	copy(l.mapped[currentIndex+int(recordLength):], append(key, value...))
 
 	l.lock.Unlock()
 
@@ -151,7 +152,7 @@ func (l *List) Set(key, value string) {
 	lastKey := cursor.Key()
 
 	// Sequential insert
-	if lastKey < key {
+	if bytes.Compare(lastKey, key) < 0 {
 		cursor.r.next = uint32(currentIndex)
 		r.prev = l.root.last
 		l.root.last = cursor.r.next
@@ -161,7 +162,7 @@ func (l *List) Set(key, value string) {
 		cursor = cursor.seek(int(l.root.first))
 
 		for cursor != nil {
-			if cursor.Key() > key {
+			if bytes.Compare(cursor.Key(), key) > 0 {
 				if cursor.index == int(l.root.first) {
 					// inserting before first
 					cursor.r.prev = uint32(currentIndex)
@@ -189,16 +190,16 @@ func (l *List) Set(key, value string) {
 	}
 }
 
-func (l *List) Get(key string) (string, error) {
+func (l *List) Get(key []byte) ([]byte, error) {
 	for c := l.NewCursor(); c != nil; c = c.Next() {
 		cKey := c.Key()
-		if cKey > key {
-			return "", ErrKeyNotFound
+		if bytes.Compare(cKey, key) > 0 {
+			return nil, ErrKeyNotFound
 		}
 
-		if cKey == key {
+		if bytes.Compare(cKey, key) == 0 {
 			return c.Value(), nil
 		}
 	}
-	return "", ErrKeyNotFound
+	return nil, ErrKeyNotFound
 }

@@ -48,14 +48,14 @@ func (c *Cursor) Prev() *Cursor {
 	return c
 }
 
-func (c *Cursor) Key() string {
+func (c *Cursor) Key() []byte {
 	start := c.index + int(recordLength)
 	end := start + int(c.r.keylen)
-	return string(c.l.mapped[start:end])
+	return c.l.mapped[start:end]
 }
 
-func (c *Cursor) Value() string {
+func (c *Cursor) Value() []byte {
 	start := c.index + int(recordLength) + int(c.r.keylen)
 	end := start + int(c.r.vallen)
-	return string(c.l.mapped[start:end])
+	return c.l.mapped[start:end]
 }
