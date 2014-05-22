@@ -1,4 +1,5 @@
-package list
+// Package listmap implements an ordered doubly linked list map.
+package listmap
 
 import (
 	"bytes"
@@ -10,7 +11,7 @@ import (
 )
 
 var (
-	ErrKeyNotFound = errors.New("list: key not found")
+	ErrKeyNotFound = errors.New("listmap: key not found")
 )
 
 const (
@@ -18,7 +19,8 @@ const (
 	recordLength = unsafe.Sizeof(record{})
 )
 
-type List struct {
+// Listmap represents an ordered doubly linked list map.
+type Listmap struct {
 	file   *os.File
 	lock   *sync.Mutex
 	root   *root
@@ -38,13 +40,15 @@ type record struct {
 	vallen uint16
 }
 
-func NewList(file string) *List {
+// NewListmap returns a pointer to an initialized list backed by file
+// or nil in the case of an error. file will be truncated.
+func NewListmap(file string) *Listmap {
 	f, err := os.Create(file)
 	if err != nil {
 		return nil
 	}
 
-	f.Truncate(1 << 4)
+	f.Truncate(int64(rootLength))
 	stat, err := f.Stat()
 	if err != nil {
 		f.Close()
@@ -59,7 +63,7 @@ func NewList(file string) *List {
 		return nil
 	}
 
-	l := &List{
+	l := &Listmap{
 		file:   f,
 		lock:   &sync.Mutex{},
 		mapped: sl,
@@ -69,7 +73,9 @@ func NewList(file string) *List {
 	return l
 }
 
-func OpenList(file string) *List {
+// OpenListmap returns a pointer to an existing Listmap
+// backed by file or nil in the case of an error.
+func OpenListmap(file string) *Listmap {
 	f, err := os.OpenFile(file, os.O_RDWR, 0666)
 	if err != nil {
 		return nil
@@ -88,7 +94,7 @@ func OpenList(file string) *List {
 		return nil
 	}
 
-	l := &List{
+	l := &Listmap{
 		file:   f,
 		lock:   &sync.Mutex{},
 		mapped: sl,
@@ -98,18 +104,23 @@ func OpenList(file string) *List {
 	return l
 }
 
-func (l *List) Close() {
+// Close closes an initialized Listmap.
+func (l *Listmap) Close() {
 	syscall.Munmap(l.mapped)
 	l.file.Close()
 }
 
-func (l *List) Destroy() {
+// Destroy closes an initialized Listmap and
+// removes its associated file.
+func (l *Listmap) Destroy() {
 	syscall.Munmap(l.mapped)
 	l.file.Close()
 	os.Remove(l.file.Name())
 }
 
-func (l *List) Set(key, value []byte) {
+// Set writes a key-value pair to a Listmap. Records are
+// kept in lexicographical order.
+func (l *Listmap) Set(key, value []byte) {
 	l.lock.Lock()
 
 	stat, _ := l.file.Stat()
@@ -190,7 +201,8 @@ func (l *List) Set(key, value []byte) {
 	}
 }
 
-func (l *List) Get(key []byte) ([]byte, error) {
+// Get returns the value in the Listmap associated with key.
+func (l *Listmap) Get(key []byte) ([]byte, error) {
 	for c := l.NewCursor(); c != nil; c = c.Next() {
 		cKey := c.Key()
 		if bytes.Compare(cKey, key) > 0 {

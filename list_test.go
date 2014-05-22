@@ -1,4 +1,4 @@
-package list
+package listmap
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 
 const N = 2048
 
-func assertOrder(l *List) bool {
+func assertOrder(l *Listmap) bool {
 	prev := []byte{}
 	for c := l.NewCursor(); c != nil; c = c.Next() {
 		if bytes.Compare(c.Key(), prev) < 0 {
@@ -22,7 +22,7 @@ func assertOrder(l *List) bool {
 }
 
 func Test1(t *testing.T) {
-	l := NewList("test.list")
+	l := NewListmap("test.list")
 
 	l.Set([]byte("1"), []byte("bar"))
 	l.Set([]byte("2"), []byte("foobar"))
@@ -38,7 +38,7 @@ func Test1(t *testing.T) {
 }
 
 func Test2(t *testing.T) {
-	l := NewList("test.list2")
+	l := NewListmap("test.list2")
 
 	l.Set([]byte("a"), []byte("AAAAA"))
 	l.Set([]byte("c"), []byte("CCCCC"))
@@ -52,7 +52,7 @@ func Test2(t *testing.T) {
 }
 
 func Test4(t *testing.T) {
-	l := NewList("test.list4")
+	l := NewListmap("test.list4")
 
 	l.Set([]byte("1"), []byte("AAAAA"))
 	l.Set([]byte("3"), []byte("CCCCC"))
@@ -67,7 +67,7 @@ func Test4(t *testing.T) {
 }
 
 func TestSequentialShort(t *testing.T) {
-	l := NewList("test.sequential_short")
+	l := NewListmap("test.sequential_short")
 
 	start := time.Now()
 	for i := 0; i < N; i++ {
@@ -83,7 +83,7 @@ func TestSequentialShort(t *testing.T) {
 }
 
 func TestSequentialLong(t *testing.T) {
-	l := NewList("test.sequential_long")
+	l := NewListmap("test.sequential_long")
 
 	start := time.Now()
 	for i := 0; i < N*8; i++ {
@@ -99,7 +99,7 @@ func TestSequentialLong(t *testing.T) {
 }
 
 func TestRead(t *testing.T) {
-	l := OpenList("test.sequential_short")
+	l := OpenListmap("test.sequential_short")
 	if l == nil {
 		t.Error("Couldn't open list")
 	}
@@ -133,7 +133,7 @@ func TestRead(t *testing.T) {
 }
 
 func TestRandomShort(t *testing.T) {
-	l := NewList("test.random_short")
+	l := NewListmap("test.random_short")
 
 	start := time.Now()
 	for i := 0; i < N; i++ {
@@ -149,7 +149,7 @@ func TestRandomShort(t *testing.T) {
 }
 
 func TestRandomLong(t *testing.T) {
-	l := NewList("test.random_long")
+	l := NewListmap("test.random_long")
 
 	start := time.Now()
 	for i := 0; i < N*4; i++ {
@@ -165,7 +165,7 @@ func TestRandomLong(t *testing.T) {
 }
 
 func BenchmarkSequentialWrites(b *testing.B) {
-	l := NewList("benchmark.sequential")
+	l := NewListmap("benchmark.sequential")
 
 	for i := 0; i < b.N; i++ {
 		l.Set([]byte(fmt.Sprintf("%020d", i)), []byte(fmt.Sprint(i)))
