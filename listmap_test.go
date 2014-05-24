@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 )
 
-const N = 2048
+const N = 1 << 11
 
 func assertOrder(l *Listmap) bool {
 	prev := []byte{}
@@ -21,14 +22,35 @@ func assertOrder(l *Listmap) bool {
 	return true
 }
 
-func Test1(t *testing.T) {
-	l := NewListmap("test.list")
+func assertZeroMissingKeys(l *Listmap) bool {
+	i := 0
+	for c := l.NewCursor(); c != nil; c = c.Next() {
+		expectedKey := []byte(fmt.Sprintf("%020d", i))
+		if bytes.Compare(c.Key(), expectedKey) != 0 {
+			return false
+		}
 
-	l.Set([]byte("1"), []byte("bar"))
-	l.Set([]byte("2"), []byte("foobar"))
-	l.Set([]byte("3"), []byte("barbaz"))
-	l.Set([]byte("4"), []byte("b"))
-	l.Set([]byte("45"), []byte("foo"))
+		i++
+	}
+
+	return true
+}
+
+func checkError(err error, t *testing.T) {
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func Test1(t *testing.T) {
+	t.Parallel()
+	l := NewListmap("test.1")
+
+	checkError(l.Set([]byte("1"), []byte("bar")), t)
+	checkError(l.Set([]byte("2"), []byte("foobar")), t)
+	checkError(l.Set([]byte("3"), []byte("barbaz")), t)
+	checkError(l.Set([]byte("4"), []byte("b")), t)
+	checkError(l.Set([]byte("45"), []byte("foo")), t)
 
 	if !assertOrder(l) {
 		t.Error("keys were not in order")
@@ -38,11 +60,12 @@ func Test1(t *testing.T) {
 }
 
 func Test2(t *testing.T) {
-	l := NewListmap("test.list2")
+	t.Parallel()
+	l := NewListmap("test.2")
 
-	l.Set([]byte("a"), []byte("AAAAA"))
-	l.Set([]byte("c"), []byte("CCCCC"))
-	l.Set([]byte("b"), []byte("BBBBB"))
+	checkError(l.Set([]byte("a"), []byte("AAAAA")), t)
+	checkError(l.Set([]byte("c"), []byte("CCCCC")), t)
+	checkError(l.Set([]byte("b"), []byte("BBBBB")), t)
 
 	if !assertOrder(l) {
 		t.Error("keys were not in order")
@@ -51,16 +74,55 @@ func Test2(t *testing.T) {
 	l.Destroy()
 }
 
-func Test4(t *testing.T) {
-	l := NewListmap("test.list4")
+func Test3(t *testing.T) {
+	t.Parallel()
+	l := NewListmap("test.3")
 
-	l.Set([]byte("1"), []byte("AAAAA"))
-	l.Set([]byte("3"), []byte("CCCCC"))
-	l.Set([]byte("2"), []byte("BBBBB"))
-	l.Set([]byte("0"), []byte("00000"))
+	checkError(l.Set([]byte("1"), []byte("AAAAA")), t)
+	checkError(l.Set([]byte("3"), []byte("CCCCC")), t)
+	checkError(l.Set([]byte("2"), []byte("BBBBB")), t)
+	checkError(l.Set([]byte("0"), []byte("00000")), t)
 
 	if !assertOrder(l) {
 		t.Error("keys were not in order")
+	}
+
+	l.Destroy()
+}
+
+func TestRemove(t *testing.T) {
+	t.Parallel()
+	l := NewListmap("test.remove")
+
+	checkError(l.Set([]byte("foo"), []byte("bar")), t)
+	val, err := l.Get([]byte("foo"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	if bytes.Compare(val, []byte("bar")) != 0 {
+		t.Errorf("expected value to be %v, got %v", []byte("bar"), val)
+	}
+
+	l.Remove([]byte("foo"))
+
+	val, err = l.Get([]byte("foo"))
+	if err != ErrKeyNotFound {
+		t.Errorf("expected error `%v', got %v", ErrKeyNotFound, err)
+	}
+
+	if bytes.Compare(val, nil) != 0 {
+		t.Errorf("expected value to be %v, got %v", nil, val)
+	}
+
+	checkError(l.Set([]byte("foo"), []byte("baz")), t)
+	val, err = l.Get([]byte("foo"))
+	if err != nil {
+		t.Error(err)
+	}
+
+	if bytes.Compare(val, []byte("baz")) != 0 {
+		t.Errorf("expected value to be %v, got %v", []byte("baz"), val)
 	}
 
 	l.Destroy()
@@ -83,11 +145,12 @@ func TestSequentialShort(t *testing.T) {
 }
 
 func TestSequentialLong(t *testing.T) {
+	t.Parallel()
 	l := NewListmap("test.sequential_long")
 
 	start := time.Now()
 	for i := 0; i < N*8; i++ {
-		l.Set([]byte(fmt.Sprintf("%09d", i)), []byte(fmt.Sprint(i)))
+		checkError(l.Set([]byte(fmt.Sprintf("%09d", i)), []byte(fmt.Sprint(i))), t)
 	}
 	t.Log("Time to insert", N*8, "sequential integers:", time.Now().Sub(start))
 
@@ -133,11 +196,12 @@ func TestRead(t *testing.T) {
 }
 
 func TestRandomShort(t *testing.T) {
+	t.Parallel()
 	l := NewListmap("test.random_short")
 
 	start := time.Now()
 	for i := 0; i < N; i++ {
-		l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i)))
+		checkError(l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i))), t)
 	}
 	t.Log("Time to insert", N, "random integers:", time.Now().Sub(start))
 
@@ -149,13 +213,74 @@ func TestRandomShort(t *testing.T) {
 }
 
 func TestRandomLong(t *testing.T) {
+	t.Parallel()
 	l := NewListmap("test.random_long")
 
 	start := time.Now()
-	for i := 0; i < N*4; i++ {
-		l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i)))
+	for i := 0; i < N*8; i++ {
+		checkError(l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i))), t)
 	}
-	t.Log("Time to insert", N*4, "random integers:", time.Now().Sub(start))
+	t.Log("Time to insert", N*8, "random integers:", time.Now().Sub(start))
+
+	if !assertOrder(l) {
+		t.Error("keys were not in order")
+	}
+
+	l.Destroy()
+}
+
+func TestConcurrentSequential(t *testing.T) {
+	t.Parallel()
+	l := NewListmap("test.concurrent_sequential")
+	var wg sync.WaitGroup
+
+	run := func(l *Listmap, n int) {
+		defer wg.Done()
+		for i := 0; i < N*4; i++ {
+			if i%10 == n {
+				checkError(l.Set([]byte(fmt.Sprintf("%020d", i)), []byte(fmt.Sprint(i))), t)
+			}
+		}
+	}
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go run(l, i)
+	}
+
+	wg.Wait()
+
+	if !assertOrder(l) {
+		t.Error("keys were not in order")
+	}
+
+	if !assertZeroMissingKeys(l) {
+		t.Error("there are missing keys")
+	}
+
+	l.Destroy()
+}
+
+func TestConcurrentRandom(t *testing.T) {
+	t.Parallel()
+	l := NewListmap("test.concurrent_random")
+	var wg sync.WaitGroup
+
+	run := func(l *Listmap, n int) {
+		defer wg.Done()
+		for i := 0; i < N*4; i++ {
+			if i%10 == n {
+				checkError(l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i))), t)
+			}
+		}
+	}
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go run(l, i)
+	}
+
+	wg.Wait()
 
 	if !assertOrder(l) {
 		t.Error("keys were not in order")
@@ -169,6 +294,44 @@ func BenchmarkSequentialWrites(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		l.Set([]byte(fmt.Sprintf("%020d", i)), []byte(fmt.Sprint(i)))
+	}
+
+	l.Destroy()
+}
+
+func BenchmarkRandomWrites(b *testing.B) {
+	l := NewListmap("benchmark.sequential")
+
+	for i := 0; i < b.N; i++ {
+		l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i)))
+	}
+
+	l.Destroy()
+}
+
+func BenchmarkSequentialWritesWithVerification(b *testing.B) {
+	l := NewListmap("benchmark.sequential")
+
+	for i := 0; i < b.N; i++ {
+		l.Set([]byte(fmt.Sprintf("%020d", i)), []byte(fmt.Sprint(i)))
+	}
+
+	if !assertOrder(l) {
+		b.Error("keys were not in order")
+	}
+
+	l.Destroy()
+}
+
+func BenchmarkRandomWritesWithVerification(b *testing.B) {
+	l := NewListmap("benchmark.sequential")
+
+	for i := 0; i < b.N; i++ {
+		l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i)))
+	}
+
+	if !assertOrder(l) {
+		b.Error("keys were not in order")
 	}
 
 	l.Destroy()

@@ -11,20 +11,26 @@ import (
 )
 
 var (
-	ErrKeyNotFound = errors.New("listmap: key not found")
+	ErrKeyNotFound       = errors.New("listmap: key not found")
+	ErrKeyPresent        = errors.New("listmap: key already present")
+	ErrFileTruncateError = errors.New("listmap: file truncate error")
+	ErrUnknown           = errors.New("listmap: unknown error")
 )
 
 const (
 	rootLength   = unsafe.Sizeof(root{})
 	recordLength = unsafe.Sizeof(record{})
+
+	constTruncateResize = 1 << 12
 )
 
 // Listmap represents an ordered doubly linked list map.
 type Listmap struct {
-	file   *os.File
-	lock   *sync.Mutex
-	root   *root
-	mapped []byte
+	file     *os.File
+	fileSize int64
+	lock     *sync.Mutex
+	root     *root
+	mapped   []byte
 }
 
 type root struct {
@@ -34,10 +40,11 @@ type root struct {
 }
 
 type record struct {
-	prev   uint32
-	next   uint32
-	keylen uint16
-	vallen uint16
+	prev    uint32
+	next    uint32
+	keylen  uint16
+	vallen  uint16
+	removed bool
 }
 
 // NewListmap returns a pointer to an initialized list backed by file
@@ -64,9 +71,10 @@ func NewListmap(file string) *Listmap {
 	}
 
 	l := &Listmap{
-		file:   f,
-		lock:   &sync.Mutex{},
-		mapped: sl,
+		file:     f,
+		lock:     &sync.Mutex{},
+		mapped:   sl,
+		fileSize: stat.Size(),
 	}
 
 	l.root = (*root)(unsafe.Pointer(&l.mapped[0]))
@@ -95,9 +103,10 @@ func OpenListmap(file string) *Listmap {
 	}
 
 	l := &Listmap{
-		file:   f,
-		lock:   &sync.Mutex{},
-		mapped: sl,
+		file:     f,
+		lock:     &sync.Mutex{},
+		mapped:   sl,
+		fileSize: stat.Size(),
 	}
 
 	l.root = (*root)(unsafe.Pointer(&l.mapped[0]))
@@ -120,16 +129,23 @@ func (l *Listmap) Destroy() {
 
 // Set writes a key-value pair to a Listmap. Records are
 // kept in lexicographical order.
-func (l *Listmap) Set(key, value []byte) {
+func (l *Listmap) Set(key, value []byte) error {
 	l.lock.Lock()
 
-	stat, _ := l.file.Stat()
-	if int64(l.root.lastInserted)+1<<23 > int64(len(l.mapped)) {
+	if int64(l.root.lastInserted)+constTruncateResize > int64(len(l.mapped)) {
 		syscall.Munmap(l.mapped)
-		l.file.Truncate(stat.Size() + 1<<23)
-		l.mapped, _ = syscall.Mmap(int(l.file.Fd()), 0, int(stat.Size()+1<<12),
+		err := l.file.Truncate(l.fileSize + constTruncateResize)
+		if err != nil {
+			l.mapped, _ = syscall.Mmap(int(l.file.Fd()), 0, int(l.fileSize),
+				syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
+			l.root = (*root)(unsafe.Pointer(&l.mapped[0]))
+			return ErrFileTruncateError
+		}
+		l.mapped, _ = syscall.Mmap(int(l.file.Fd()), 0, int(l.fileSize+constTruncateResize),
 			syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_SHARED)
 		l.root = (*root)(unsafe.Pointer(&l.mapped[0]))
+
+		l.fileSize += constTruncateResize
 	}
 
 	// First record
@@ -143,7 +159,7 @@ func (l *Listmap) Set(key, value []byte) {
 		l.root.last = uint32(rootLength)
 		l.root.lastInserted = uint32(rootLength)
 		l.lock.Unlock()
-		return
+		return nil
 	}
 
 	cursor := l.NewCursor().seek(int(l.root.lastInserted))
@@ -163,23 +179,28 @@ func (l *Listmap) Set(key, value []byte) {
 	lastKey := cursor.Key()
 
 	// Sequential insert
-	if bytes.Compare(lastKey, key) < 0 {
+	if cmp := bytes.Compare(lastKey, key); cmp < 0 || (cmp == 0 && cursor.r.removed) {
 		cursor.r.next = uint32(currentIndex)
 		r.prev = l.root.last
 		l.root.last = cursor.r.next
+		return nil
 	} else {
 		// find first greater than
-
 		cursor = cursor.seek(int(l.root.first))
 
 		for cursor != nil {
+			if bytes.Compare(cursor.Key(), key) == 0 &&
+				!cursor.r.removed {
+				return ErrKeyPresent
+			}
+
 			if bytes.Compare(cursor.Key(), key) > 0 {
 				if cursor.index == int(l.root.first) {
 					// inserting before first
 					cursor.r.prev = uint32(currentIndex)
 					r.next = uint32(cursor.index)
 					l.root.first = uint32(currentIndex)
-					return
+					return nil
 				} else {
 					nextRecord := cursor.r
 					nextRecordIndex := cursor.index
@@ -192,13 +213,15 @@ func (l *Listmap) Set(key, value []byte) {
 					previousRecord.next = uint32(currentIndex)
 					nextRecord.prev = uint32(currentIndex)
 
-					return
+					return nil
 				}
 			} else {
 				cursor = cursor.Next()
 			}
 		}
 	}
+
+	return ErrUnknown
 }
 
 // Get returns the value in the Listmap associated with key.
@@ -210,8 +233,23 @@ func (l *Listmap) Get(key []byte) ([]byte, error) {
 		}
 
 		if bytes.Compare(cKey, key) == 0 {
-			return c.Value(), nil
+			if !c.r.removed {
+				return c.Value(), nil
+			}
 		}
 	}
 	return nil, ErrKeyNotFound
+}
+
+func (l *Listmap) Remove(key []byte) {
+	for c := l.NewCursor(); c != nil; c = c.Next() {
+		cKey := c.Key()
+		if bytes.Compare(cKey, key) > 0 {
+			return
+		}
+
+		if bytes.Compare(cKey, key) == 0 {
+			c.r.removed = true
+		}
+	}
 }
