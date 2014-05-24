@@ -241,6 +241,7 @@ func (l *Listmap) Get(key []byte) ([]byte, error) {
 	return nil, ErrKeyNotFound
 }
 
+// Remove marks a key as removed
 func (l *Listmap) Remove(key []byte) {
 	for c := l.NewCursor(); c != nil; c = c.Next() {
 		cKey := c.Key()
