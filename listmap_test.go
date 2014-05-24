@@ -261,6 +261,39 @@ func TestConcurrentSequential(t *testing.T) {
 	l.Destroy()
 }
 
+func TestConcurrentSequential2(t *testing.T) {
+	t.Parallel()
+	rand.Seed(time.Now().Unix())
+	l := NewListmap("test.concurrent_sequential_2")
+	var wg sync.WaitGroup
+
+	run := func(l *Listmap, n int) {
+		defer wg.Done()
+		for i := 0; i < N*4; i++ {
+			if rand.Float32() < 0.85 {
+				l.Set([]byte(fmt.Sprintf("%020d", i)), []byte(fmt.Sprint(i)))
+			}
+		}
+	}
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go run(l, i)
+	}
+
+	wg.Wait()
+
+	if !assertOrder(l) {
+		t.Error("keys were not in order")
+	}
+
+	if !assertZeroMissingKeys(l) {
+		t.Error("there are missing keys")
+	}
+
+	l.Destroy()
+}
+
 func TestConcurrentRandom(t *testing.T) {
 	t.Parallel()
 	l := NewListmap("test.concurrent_random")
