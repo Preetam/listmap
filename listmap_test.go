@@ -333,7 +333,7 @@ func BenchmarkSequentialWrites(b *testing.B) {
 }
 
 func BenchmarkRandomWrites(b *testing.B) {
-	l := NewListmap("benchmark.sequential")
+	l := NewListmap("benchmark.random")
 
 	for i := 0; i < b.N; i++ {
 		l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i)))
@@ -343,7 +343,7 @@ func BenchmarkRandomWrites(b *testing.B) {
 }
 
 func BenchmarkSequentialWritesWithVerification(b *testing.B) {
-	l := NewListmap("benchmark.sequential")
+	l := NewListmap("benchmark.sequential_verify")
 
 	for i := 0; i < b.N; i++ {
 		l.Set([]byte(fmt.Sprintf("%020d", i)), []byte(fmt.Sprint(i)))
@@ -357,7 +357,7 @@ func BenchmarkSequentialWritesWithVerification(b *testing.B) {
 }
 
 func BenchmarkRandomWritesWithVerification(b *testing.B) {
-	l := NewListmap("benchmark.sequential")
+	l := NewListmap("benchmark.random_verify")
 
 	for i := 0; i < b.N; i++ {
 		l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i)))
