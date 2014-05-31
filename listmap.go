@@ -34,14 +34,14 @@ type Listmap struct {
 }
 
 type root struct {
-	first        uint32
-	last         uint32
-	lastInserted uint32
+	first        uint64
+	last         uint64
+	lastInserted uint64
 }
 
 type record struct {
-	prev    uint32
-	next    uint32
+	prev    uint64
+	next    uint64
 	keylen  uint16
 	vallen  uint16
 	removed bool
@@ -155,9 +155,9 @@ func (l *Listmap) Set(key, value []byte) error {
 		r.vallen = uint16(len(value))
 		copy(l.mapped[rootLength+recordLength:], append(key, value...))
 
-		l.root.first = uint32(rootLength)
-		l.root.last = uint32(rootLength)
-		l.root.lastInserted = uint32(rootLength)
+		l.root.first = uint64(rootLength)
+		l.root.last = uint64(rootLength)
+		l.root.lastInserted = uint64(rootLength)
 		l.lock.Unlock()
 		return nil
 	}
@@ -166,7 +166,7 @@ func (l *Listmap) Set(key, value []byte) error {
 
 	// New records always go to the end
 	currentIndex := int(l.root.lastInserted) + int(recordLength) + int(cursor.r.keylen+cursor.r.vallen)
-	l.root.lastInserted = uint32(currentIndex)
+	l.root.lastInserted = uint64(currentIndex)
 	r := (*record)(unsafe.Pointer(&l.mapped[currentIndex]))
 	r.keylen = uint16(len(key))
 	r.vallen = uint16(len(value))
@@ -180,7 +180,7 @@ func (l *Listmap) Set(key, value []byte) error {
 
 	// Sequential insert
 	if cmp := bytes.Compare(lastKey, key); cmp < 0 || (cmp == 0 && cursor.r.removed) {
-		cursor.r.next = uint32(currentIndex)
+		cursor.r.next = uint64(currentIndex)
 		r.prev = l.root.last
 		l.root.last = cursor.r.next
 		return nil
@@ -197,9 +197,9 @@ func (l *Listmap) Set(key, value []byte) error {
 			if bytes.Compare(cursor.Key(), key) > 0 {
 				if cursor.index == int(l.root.first) {
 					// inserting before first
-					cursor.r.prev = uint32(currentIndex)
-					r.next = uint32(cursor.index)
-					l.root.first = uint32(currentIndex)
+					cursor.r.prev = uint64(currentIndex)
+					r.next = uint64(cursor.index)
+					l.root.first = uint64(currentIndex)
 					return nil
 				} else {
 					nextRecord := cursor.r
@@ -207,11 +207,11 @@ func (l *Listmap) Set(key, value []byte) error {
 					previousRecord := cursor.Prev().r
 					previousRecordIndex := cursor.index
 
-					r.next = uint32(nextRecordIndex)
-					r.prev = uint32(previousRecordIndex)
+					r.next = uint64(nextRecordIndex)
+					r.prev = uint64(previousRecordIndex)
 
-					previousRecord.next = uint32(currentIndex)
-					nextRecord.prev = uint32(currentIndex)
+					previousRecord.next = uint64(currentIndex)
+					nextRecord.prev = uint64(currentIndex)
 
 					return nil
 				}
