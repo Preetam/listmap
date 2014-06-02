@@ -21,7 +21,7 @@ const (
 	rootLength   = unsafe.Sizeof(root{})
 	recordLength = unsafe.Sizeof(record{})
 
-	constTruncateResize = 1 << 12
+	constTruncateResize = 1 << 16
 )
 
 // Listmap represents an ordered doubly linked list map.
@@ -174,50 +174,50 @@ func (l *Listmap) Set(key, value []byte) error {
 
 	l.lock.Unlock()
 
+	// Special case: insert at end
 	cursor = cursor.seek(int(l.root.last))
-
 	lastKey := cursor.Key()
-
-	// Sequential insert
 	if cmp := bytes.Compare(lastKey, key); cmp < 0 || (cmp == 0 && cursor.r.removed) {
 		cursor.r.next = uint64(currentIndex)
 		r.prev = l.root.last
 		l.root.last = cursor.r.next
 		return nil
-	} else {
-		// find first greater than
-		cursor = cursor.seek(int(l.root.first))
+	}
 
-		for cursor != nil {
-			if bytes.Compare(cursor.Key(), key) == 0 &&
-				!cursor.r.removed {
-				return ErrKeyPresent
-			}
+	// Special case: insert at beginning
+	cursor = cursor.seek(int(l.root.first))
+	firstKey := cursor.Key()
+	if cmp := bytes.Compare(firstKey, key); cmp > 0 || (cmp == 0 && cursor.r.removed) {
+		cursor.r.prev = uint64(currentIndex)
+		r.next = l.root.first
+		l.root.first = cursor.r.prev
+		return nil
+	}
 
-			if bytes.Compare(cursor.Key(), key) > 0 {
-				if cursor.index == int(l.root.first) {
-					// inserting before first
-					cursor.r.prev = uint64(currentIndex)
-					r.next = uint64(cursor.index)
-					l.root.first = uint64(currentIndex)
-					return nil
-				} else {
-					nextRecord := cursor.r
-					nextRecordIndex := cursor.index
-					previousRecord := cursor.Prev().r
-					previousRecordIndex := cursor.index
+	// find last less than
+	cursor = cursor.seek(int(l.root.last))
 
-					r.next = uint64(nextRecordIndex)
-					r.prev = uint64(previousRecordIndex)
+	for cursor != nil {
+		if bytes.Compare(cursor.Key(), key) == 0 &&
+			!cursor.r.removed {
+			return ErrKeyPresent
+		}
 
-					previousRecord.next = uint64(currentIndex)
-					nextRecord.prev = uint64(currentIndex)
+		if bytes.Compare(cursor.Key(), key) < 0 {
+			previousRecord := cursor.r
+			previousRecordIndex := cursor.index
+			nextRecord := cursor.Next().r
+			nextRecordIndex := cursor.index
 
-					return nil
-				}
-			} else {
-				cursor = cursor.Next()
-			}
+			r.next = uint64(nextRecordIndex)
+			r.prev = uint64(previousRecordIndex)
+
+			previousRecord.next = uint64(currentIndex)
+			nextRecord.prev = uint64(currentIndex)
+
+			return nil
+		} else {
+			cursor = cursor.Prev()
 		}
 	}
 
