@@ -44,7 +44,11 @@ func checkError(err error, t *testing.T) {
 
 func Test1(t *testing.T) {
 	t.Parallel()
-	l := NewListmap("test.1")
+	l, err := NewListmap("test.1")
+
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	checkError(l.Set([]byte("1"), []byte("bar")), t)
 	checkError(l.Set([]byte("2"), []byte("foobar")), t)
@@ -61,7 +65,11 @@ func Test1(t *testing.T) {
 
 func Test2(t *testing.T) {
 	t.Parallel()
-	l := NewListmap("test.2")
+	l, err := NewListmap("test.2")
+
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	checkError(l.Set([]byte("a"), []byte("AAAAA")), t)
 	checkError(l.Set([]byte("c"), []byte("CCCCC")), t)
@@ -76,7 +84,11 @@ func Test2(t *testing.T) {
 
 func Test3(t *testing.T) {
 	t.Parallel()
-	l := NewListmap("test.3")
+	l, err := NewListmap("test.3")
+
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	checkError(l.Set([]byte("1"), []byte("AAAAA")), t)
 	checkError(l.Set([]byte("3"), []byte("CCCCC")), t)
@@ -92,7 +104,11 @@ func Test3(t *testing.T) {
 
 func TestRemove(t *testing.T) {
 	t.Parallel()
-	l := NewListmap("test.remove")
+	l, err := NewListmap("test.remove")
+
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	checkError(l.Set([]byte("foo"), []byte("bar")), t)
 	val, err := l.Get([]byte("foo"))
@@ -129,7 +145,11 @@ func TestRemove(t *testing.T) {
 }
 
 func TestSequentialShort(t *testing.T) {
-	l := NewListmap("test.sequential_short")
+	l, err := NewListmap("test.sequential_short")
+
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	start := time.Now()
 	for i := 0; i < N; i++ {
@@ -146,7 +166,11 @@ func TestSequentialShort(t *testing.T) {
 
 func TestSequentialLong(t *testing.T) {
 	t.Parallel()
-	l := NewListmap("test.sequential_long")
+	l, err := NewListmap("test.sequential_long")
+
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	start := time.Now()
 	for i := 0; i < N*8; i++ {
@@ -162,7 +186,12 @@ func TestSequentialLong(t *testing.T) {
 }
 
 func TestRead(t *testing.T) {
-	l := OpenListmap("test.sequential_short")
+	l, err := OpenListmap("test.sequential_short")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	if l == nil {
 		t.Error("Couldn't open list")
 	}
@@ -197,7 +226,11 @@ func TestRead(t *testing.T) {
 
 func TestRandomShort(t *testing.T) {
 	t.Parallel()
-	l := NewListmap("test.random_short")
+	l, err := NewListmap("test.random_short")
+
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	start := time.Now()
 	for i := 0; i < N; i++ {
@@ -214,7 +247,11 @@ func TestRandomShort(t *testing.T) {
 
 func TestRandomLong(t *testing.T) {
 	t.Parallel()
-	l := NewListmap("test.random_long")
+	l, err := NewListmap("test.random_long")
+
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	start := time.Now()
 	for i := 0; i < N*8; i++ {
@@ -231,7 +268,12 @@ func TestRandomLong(t *testing.T) {
 
 func TestConcurrentSequential(t *testing.T) {
 	t.Parallel()
-	l := NewListmap("test.concurrent_sequential")
+	l, err := NewListmap("test.concurrent_sequential")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var wg sync.WaitGroup
 
 	run := func(l *Listmap, n int) {
@@ -264,7 +306,12 @@ func TestConcurrentSequential(t *testing.T) {
 func TestConcurrentSequential2(t *testing.T) {
 	t.Parallel()
 	rand.Seed(time.Now().Unix())
-	l := NewListmap("test.concurrent_sequential_2")
+	l, err := NewListmap("test.concurrent_sequential_2")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var wg sync.WaitGroup
 
 	run := func(l *Listmap, n int) {
@@ -296,7 +343,12 @@ func TestConcurrentSequential2(t *testing.T) {
 
 func TestConcurrentRandom(t *testing.T) {
 	t.Parallel()
-	l := NewListmap("test.concurrent_random")
+	l, err := NewListmap("test.concurrent_random")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var wg sync.WaitGroup
 
 	run := func(l *Listmap, n int) {
@@ -323,7 +375,11 @@ func TestConcurrentRandom(t *testing.T) {
 }
 
 func BenchmarkSequentialWrites(b *testing.B) {
-	l := NewListmap("benchmark.sequential")
+	l, err := NewListmap("benchmark.sequential")
+
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	for i := 0; i < b.N; i++ {
 		l.Set([]byte(fmt.Sprintf("%020d", i)), []byte(fmt.Sprint(i)))
@@ -333,7 +389,11 @@ func BenchmarkSequentialWrites(b *testing.B) {
 }
 
 func BenchmarkRandomWrites(b *testing.B) {
-	l := NewListmap("benchmark.random")
+	l, err := NewListmap("benchmark.random")
+
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	for i := 0; i < b.N; i++ {
 		l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i)))
@@ -343,7 +403,11 @@ func BenchmarkRandomWrites(b *testing.B) {
 }
 
 func BenchmarkSequentialWritesWithVerification(b *testing.B) {
-	l := NewListmap("benchmark.sequential_verify")
+	l, err := NewListmap("benchmark.sequential_verify")
+
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	for i := 0; i < b.N; i++ {
 		l.Set([]byte(fmt.Sprintf("%020d", i)), []byte(fmt.Sprint(i)))
@@ -357,7 +421,11 @@ func BenchmarkSequentialWritesWithVerification(b *testing.B) {
 }
 
 func BenchmarkRandomWritesWithVerification(b *testing.B) {
-	l := NewListmap("benchmark.random_verify")
+	l, err := NewListmap("benchmark.random_verify")
+
+	if err != nil {
+		b.Fatal(err)
+	}
 
 	for i := 0; i < b.N; i++ {
 		l.Set([]byte(fmt.Sprint(rand.Int())), []byte(fmt.Sprint(i)))

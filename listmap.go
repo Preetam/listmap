@@ -49,17 +49,17 @@ type record struct {
 
 // NewListmap returns a pointer to an initialized list backed by file
 // or nil in the case of an error. file will be truncated.
-func NewListmap(file string) *Listmap {
+func NewListmap(file string) (*Listmap, error) {
 	f, err := os.Create(file)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	f.Truncate(int64(rootLength))
 	stat, err := f.Stat()
 	if err != nil {
 		f.Close()
-		return nil
+		return nil, err
 	}
 
 	sl, err := syscall.Mmap(int(f.Fd()), 0, int(stat.Size()),
@@ -67,7 +67,7 @@ func NewListmap(file string) *Listmap {
 
 	if err != nil {
 		f.Close()
-		return nil
+		return nil, err
 	}
 
 	l := &Listmap{
@@ -78,20 +78,20 @@ func NewListmap(file string) *Listmap {
 	}
 
 	l.root = (*root)(unsafe.Pointer(&l.mapped[0]))
-	return l
+	return l, nil
 }
 
 // OpenListmap returns a pointer to an existing Listmap
 // backed by file or nil in the case of an error.
-func OpenListmap(file string) *Listmap {
+func OpenListmap(file string) (*Listmap, error) {
 	f, err := os.OpenFile(file, os.O_RDWR, 0666)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	stat, err := f.Stat()
 	if err != nil {
 		f.Close()
-		return nil
+		return nil, err
 	}
 
 	sl, err := syscall.Mmap(int(f.Fd()), 0, int(stat.Size()),
@@ -99,7 +99,7 @@ func OpenListmap(file string) *Listmap {
 
 	if err != nil {
 		f.Close()
-		return nil
+		return nil, err
 	}
 
 	l := &Listmap{
@@ -110,7 +110,7 @@ func OpenListmap(file string) *Listmap {
 	}
 
 	l.root = (*root)(unsafe.Pointer(&l.mapped[0]))
-	return l
+	return l, nil
 }
 
 // Close closes an initialized Listmap.
@@ -253,4 +253,11 @@ func (l *Listmap) Remove(key []byte) {
 			c.r.removed = true
 		}
 	}
+}
+
+// Size returns the current file size of the Listmap.
+// Note: this is the raw file size, not the amount
+// of data stored in the Listmap.
+func (l *Listmap) Size() int {
+	return int(l.fileSize)
 }
