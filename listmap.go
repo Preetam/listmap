@@ -131,6 +131,7 @@ func (l *Listmap) Destroy() {
 // kept in lexicographical order.
 func (l *Listmap) Set(key, value []byte) error {
 	l.lock.Lock()
+	defer l.lock.Unlock()
 
 	if int64(l.root.lastInserted)+constTruncateResize > int64(len(l.mapped)) {
 		syscall.Munmap(l.mapped)
@@ -158,7 +159,6 @@ func (l *Listmap) Set(key, value []byte) error {
 		l.root.first = uint64(rootLength)
 		l.root.last = uint64(rootLength)
 		l.root.lastInserted = uint64(rootLength)
-		l.lock.Unlock()
 		return nil
 	}
 
@@ -171,8 +171,6 @@ func (l *Listmap) Set(key, value []byte) error {
 	r.keylen = uint16(len(key))
 	r.vallen = uint16(len(value))
 	copy(l.mapped[currentIndex+int(recordLength):], append(key, value...))
-
-	l.lock.Unlock()
 
 	// Special case: insert at end
 	cursor = cursor.seek(int(l.root.last))
